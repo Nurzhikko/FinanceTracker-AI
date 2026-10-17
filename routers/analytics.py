@@ -1,7 +1,11 @@
 
 import sqlite3
 
-from fastapi import APIRouter
+
+from fastapi import APIRouter, Depends
+
+from security import get_current_user_id
+
 
 import database
 
@@ -12,8 +16,11 @@ router = APIRouter(
 )
 
 
+
 @router.get("/summary")
-def get_financial_summary():
+def get_financial_summary(
+    user_id: int = Depends(get_current_user_id)
+):
     connection = sqlite3.connect(
         database.DATABASE_NAME
     )
@@ -27,12 +34,15 @@ def get_financial_summary():
                     CASE WHEN type = 'income'
                     THEN amount ELSE 0 END
                 ), 0),
+
                 COALESCE(SUM(
                     CASE WHEN type = 'expense'
                     THEN amount ELSE 0 END
                 ), 0)
+
             FROM transactions
-        """)
+            WHERE user_id = ?
+        """, (user_id,))
 
         income, expenses = cursor.fetchone()
 
@@ -46,8 +56,12 @@ def get_financial_summary():
         connection.close()
 
 
+
+
 @router.get("/categories")
-def get_category_analytics():
+def get_category_analytics(
+    user_id: int = Depends(get_current_user_id)
+):
     connection = sqlite3.connect(
         database.DATABASE_NAME
     )
@@ -55,16 +69,20 @@ def get_category_analytics():
     try:
         cursor = connection.cursor()
 
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT
                 category,
                 COUNT(*) AS transaction_count,
                 ROUND(SUM(amount), 2) AS total
             FROM transactions
             WHERE type = 'expense'
+              AND user_id = ?
             GROUP BY category
             ORDER BY total DESC
-        """)
+            """,
+            (user_id,)
+        )
 
         rows = cursor.fetchall()
 

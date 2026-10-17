@@ -26,6 +26,38 @@ def create_database():
         )
     """)
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            email TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            created_at TEXT NOT NULL
+                DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # Check existing transaction columns
+    cursor.execute("PRAGMA table_info(transactions)")
+    columns = [row[1] for row in cursor.fetchall()]
+
+    # Add user_id to existing database
+    if "user_id" not in columns:
+        cursor.execute("""
+            ALTER TABLE transactions
+            ADD COLUMN user_id INTEGER
+            REFERENCES users(id)
+        """)
+
+    # Index for faster filtering by user
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS
+        idx_transactions_user_id
+        ON transactions(user_id)
+    """)
+
+
+
     connection.commit()
     connection.close()
 

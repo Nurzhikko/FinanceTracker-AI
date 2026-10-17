@@ -1,10 +1,139 @@
 
 const API_URL = window.location.origin;
+
 let editingTransactionId = null;
+let expenseChart = null;
+let accessToken = null;
+
+const loginForm = document.getElementById("login-form");
+const loginError = document.getElementById("login-error");
+const authScreen = document.getElementById("auth-screen");
+
+const loginCard = document.getElementById("login-card");
+const registerCard = document.getElementById("register-card");
+
+const registerForm = document.getElementById("register-form");
+const registerError = document.getElementById("register-error");
+
+const transactionForm = document.getElementById("transaction-form");
+const logoutButton = document.getElementById("logout-btn");
+
+function showAuthCard(card) {
+    loginCard.style.display = "none";
+    registerCard.style.display = "none";
+    card.style.display = "block";
+}
+
+function getAuthHeaders() {
+    return {
+        Authorization: `Bearer ${accessToken}`
+    };
+}
+
+async function authenticatedFetch(url, options = {}) {
+    if (!accessToken) {
+        throw new Error("Please sign in first.");
+    }
+
+    const tokenUsed = accessToken;
+
+    const response = await fetch(url, {
+        ...options,
+        headers: {
+            ...options.headers,
+            ...getAuthHeaders()
+        }
+    });
+
+    if (response.status === 401) {
+        if (accessToken === tokenUsed) {
+            logout();
+        }
+
+        throw new Error(
+            "Session expired. Please sign in again."
+        );
+    }
+
+    return response;
+}
+
+loginForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const email = document
+        .getElementById("login-email")
+        .value.trim();
+
+    const password = document
+        .getElementById("login-password")
+        .value;
+
+    loginError.textContent = "";
+    loginError.style.color = "#dc2626";
+
+    const button = loginForm.querySelector(
+        'button[type="submit"]'
+    );
+
+    button.disabled = true;
+
+    try {
+        const response = await fetch(
+            `${API_URL}/auth/login`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    email,
+                    password
+                })
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                typeof data.detail === "string"
+                    ? data.detail
+                    : "Login failed"
+            );
+        }
+
+        if (!data.access_token) {
+            throw new Error("No access token received");
+        }
+
+        accessToken = data.access_token;
+
+        document.getElementById(
+            "login-password"
+        ).value = "";
+
+        authScreen.style.display = "none";
+
+        await loadDashboard();
+
+        console.log("Login successful");
+
+    } catch (error) {
+        console.error("Login error:", error);
+
+        if (!accessToken) {
+            loginError.textContent = error.message;
+        }
+
+    } finally {
+        button.disabled = false;
+    }
+});
 
 async function loadSummary() {
     try {
-        const response = await fetch(
+        const response = await authenticatedFetch(
             `${API_URL}/analytics/summary`
         );
 
@@ -30,12 +159,14 @@ async function loadSummary() {
 
 async function loadTransactions() {
     try {
-        const response = await fetch(
+        const response = await authenticatedFetch(
             `${API_URL}/transactions`
         );
 
         if (!response.ok) {
-            throw new Error("Failed to load transactions");
+            throw new Error(
+                "Failed to load transactions"
+            );
         }
 
         const data = await response.json();
@@ -49,130 +180,121 @@ async function loadTransactions() {
         if (data.transactions.length === 0) {
             const row = tbody.insertRow();
             const cell = row.insertCell();
-            cell.colSpan = 6;
+
+            cell.colSpan = 5;
             cell.textContent = "No transactions yet.";
+
             return;
         }
 
-        
-data.transactions.forEach(transaction => {
-    const row = tbody.insertRow();
+        data.transactions.forEach(transaction => {
+            const row = tbody.insertRow();
 
-    [
-        transaction.id,
-        transaction.title,
-        transaction.category,
-        transaction.type,
-        Number(transaction.amount).toFixed(2)
-    ].forEach(value => {
-        const cell = row.insertCell();
-        cell.textContent = value;
-    });
+            [
+                transaction.title,
+                transaction.category,
+                transaction.type,
+                Number(transaction.amount).toFixed(2)
+            ].forEach(value => {
+                const cell = row.insertCell();
+                cell.textContent = value;
+            });
 
-    const actionsCell = row.insertCell();
+            const actionsCell = row.insertCell();
 
-    const deleteButton = document.createElement("button");
-    deleteButton.textContent = "Delete";
-    deleteButton.className = "delete-btn";
+            const editButton = document.createElement("button");
 
-    deleteButton.addEventListener("click", async () => {
-        const confirmed = confirm(
-            `Delete transaction "${transaction.title}"?`
-        );
+            editButton.textContent = "Edit";
+            editButton.className = "edit-btn";
 
-        if (!confirmed) return;
+            editButton.addEventListener("click", () => {
+                editingTransactionId = transaction.id;
 
-        deleteButton.disabled = true;
+                document.getElementById("title").value =
+                    transaction.title;
 
-        try {
-            const response = await fetch(
-                `${API_URL}/transactions/${transaction.id}`,
-                { method: "DELETE" }
-            );
+                document.getElementById("amount").value =
+                    transaction.amount;
 
-            if (!response.ok) {
-                throw new Error("Failed to delete transaction");
-            }
+                document.getElementById("category").value =
+                    transaction.category;
 
-            await loadDashboard();
+                document.getElementById("type").value =
+                    transaction.type;
 
-        } catch (error) {
-            console.error(error);
-            alert("Could not delete transaction.");
-            deleteButton.disabled = false;
-        }
-    });
-    
-const editButton = document.createElement("button");
+                const submitButton = transactionForm.querySelector(
+                    'button[type="submit"]'
+                );
 
-editButton.textContent = "Edit";
-editButton.className = "edit-btn";
+                submitButton.textContent = "Save Changes";
 
+                transactionForm.scrollIntoView({
+                    behavior: "smooth",
+                    block: "center"
+                });
+            });
 
-editButton.addEventListener("click", () => {
-    editingTransactionId = transaction.id;
+            const deleteButton = document.createElement("button");
 
-    document.getElementById("title").value =
-        transaction.title;
+            deleteButton.textContent = "Delete";
+            deleteButton.className = "delete-btn";
 
-    document.getElementById("amount").value =
-        transaction.amount;
+            deleteButton.addEventListener("click", async () => {
+                const confirmed = confirm(
+                    `Delete transaction "${transaction.title}"?`
+                );
 
-    document.getElementById("category").value =
-        transaction.category;
+                if (!confirmed) return;
 
-    document.getElementById("type").value =
-        transaction.type;
+                deleteButton.disabled = true;
 
-    const submitButton = document.querySelector(
-        '#transaction-form button[type="submit"]'
-    );
+                try {
+                    const response = await authenticatedFetch(
+                        `${API_URL}/transactions/${transaction.id}`,
+                        {
+                            method: "DELETE"
+                        }
+                    );
 
-    submitButton.textContent = "Save Changes";
+                    if (!response.ok) {
+                        throw new Error(
+                            "Failed to delete transaction"
+                        );
+                    }
 
-    document.getElementById("transaction-form")
-        .scrollIntoView({
-            behavior: "smooth",
-            block: "center"
+                    await loadDashboard();
+
+                } catch (error) {
+                    console.error(error);
+                    alert(error.message);
+                    deleteButton.disabled = false;
+                }
+            });
+
+            actionsCell.appendChild(editButton);
+            actionsCell.appendChild(deleteButton);
         });
-});
-
-
-actionsCell.appendChild(editButton);
-
-    actionsCell.appendChild(deleteButton);
-});
-
 
     } catch (error) {
         console.error("Transactions error:", error);
     }
 }
 
-async function loadDashboard() {
-    await Promise.all([
-        loadSummary(),
-        loadTransactions(),
-        loadExpenseChart()
-    ]);
-}
-
-document.addEventListener(
-    "DOMContentLoaded",
-    loadDashboard
-);
-
-
-
-const transactionForm = document.getElementById(
-    "transaction-form"
-);
-
 transactionForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
+    if (!accessToken) {
+        alert("Please sign in first.");
+        authScreen.style.display = "flex";
+        return;
+    }
+
     const title = document.getElementById("title").value.trim();
-    const amount = Number(document.getElementById("amount").value);
+
+    const amount = Number(
+        document.getElementById("amount").value
+    );
+
     const category = document.getElementById("category").value;
     const type = document.getElementById("type").value;
 
@@ -182,10 +304,10 @@ transactionForm.addEventListener("submit", async (event) => {
     }
 
     const transaction = {
-        title: title,
-        amount: amount,
-        category: category,
-        type: type
+        title,
+        amount,
+        category,
+        type
     };
 
     const submitButton = transactionForm.querySelector(
@@ -195,28 +317,31 @@ transactionForm.addEventListener("submit", async (event) => {
     submitButton.disabled = true;
 
     try {
-        
         const isEditing = editingTransactionId !== null;
 
         const url = isEditing
             ? `${API_URL}/transactions/${editingTransactionId}`
             : `${API_URL}/transactions`;
 
-        const response = await fetch(url, {
+        const response = await authenticatedFetch(url, {
             method: isEditing ? "PUT" : "POST",
             headers: {
-            "Content-Type": "application/json"
+                "Content-Type": "application/json"
             },
             body: JSON.stringify(transaction)
-});
-
+        });
 
         if (!response.ok) {
-            throw new Error("Failed to save transaction");
+            const data = await response.json();
+
+            throw new Error(
+                typeof data.detail === "string"
+                    ? data.detail
+                    : "Failed to save transaction"
+            );
         }
 
-        
-        const successMessage = isEditing
+        const message = isEditing
             ? "Transaction updated successfully!"
             : "Transaction added successfully!";
 
@@ -227,26 +352,20 @@ transactionForm.addEventListener("submit", async (event) => {
 
         await loadDashboard();
 
-        alert(successMessage);
-
-
+        alert(message);
 
     } catch (error) {
         console.error("Transaction error:", error);
-        alert("Could not save transaction. Please try again.");
+        alert(error.message);
 
     } finally {
         submitButton.disabled = false;
     }
 });
 
-
-
-let expenseChart = null;
-
 async function loadExpenseChart() {
     try {
-        const response = await fetch(
+        const response = await authenticatedFetch(
             `${API_URL}/analytics/categories`
         );
 
@@ -278,7 +397,7 @@ async function loadExpenseChart() {
         expenseChart = new Chart(canvas, {
             type: "doughnut",
             data: {
-                labels: labels,
+                labels,
                 datasets: [{
                     data: values,
                     backgroundColor: [
@@ -308,3 +427,175 @@ async function loadExpenseChart() {
         console.error("Chart error:", error);
     }
 }
+
+async function loadDashboard() {
+    if (!accessToken) {
+        return;
+    }
+
+    await Promise.all([
+        loadSummary(),
+        loadTransactions(),
+        loadExpenseChart()
+    ]);
+}
+
+document.getElementById("show-register").addEventListener(
+    "click",
+    (event) => {
+        event.preventDefault();
+
+        loginError.textContent = "";
+        registerError.textContent = "";
+
+        showAuthCard(registerCard);
+    }
+);
+
+document.getElementById("show-login").addEventListener(
+    "click",
+    (event) => {
+        event.preventDefault();
+
+        registerError.textContent = "";
+        showAuthCard(loginCard);
+    }
+);
+
+registerForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const name = document
+        .getElementById("register-name")
+        .value.trim();
+
+    const email = document
+        .getElementById("register-email")
+        .value.trim();
+
+    const password = document
+        .getElementById("register-password")
+        .value;
+
+    registerError.textContent = "";
+
+    const submitButton = registerForm.querySelector(
+        'button[type="submit"]'
+    );
+
+    submitButton.disabled = true;
+
+    try {
+        const response = await fetch(
+            `${API_URL}/auth/register`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    name,
+                    email,
+                    password
+                })
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                typeof data.detail === "string"
+                    ? data.detail
+                    : "Registration failed"
+            );
+        }
+
+        registerForm.reset();
+
+        showAuthCard(loginCard);
+
+        document.getElementById("login-email").value =
+            email;
+
+        loginError.style.color = "#16a34a";
+        loginError.textContent =
+            "Account created successfully! Please sign in.";
+
+    } catch (error) {
+        registerError.textContent = error.message;
+
+    } finally {
+        submitButton.disabled = false;
+    }
+});
+
+function logout() {
+    accessToken = null;
+    editingTransactionId = null;
+
+    transactionForm.reset();
+
+    const submitButton = transactionForm.querySelector(
+        'button[type="submit"]'
+    );
+
+    submitButton.textContent = "Add Transaction";
+
+    document.getElementById("balance").textContent = "0.00";
+    document.getElementById("income").textContent = "0.00";
+    document.getElementById("expenses").textContent = "0.00";
+
+    const tbody = document.getElementById("transactions-body");
+
+    tbody.replaceChildren();
+
+    const row = tbody.insertRow();
+    const cell = row.insertCell();
+
+    cell.colSpan = 5;
+    cell.textContent = "Sign in to view transactions.";
+
+    if (expenseChart) {
+        expenseChart.destroy();
+        expenseChart = null;
+    }
+
+    loginForm.reset();
+    loginError.textContent = "";
+    loginError.style.color = "#dc2626";
+
+    registerForm.reset();
+    registerError.textContent = "";
+
+    showAuthCard(loginCard);
+    authScreen.style.display = "flex";
+}
+
+logoutButton.addEventListener("click", logout);
+
+document.querySelectorAll(".toggle-password").forEach(button => {
+    button.addEventListener("click", () => {
+        const input = document.getElementById(
+            button.dataset.target
+        );
+
+        if (!input) return;
+
+        const showPassword = input.type === "password";
+
+        input.type = showPassword ? "text" : "password";
+
+        button.textContent = showPassword ? "Hide" : "Show";
+
+        button.setAttribute(
+            "aria-label",
+            showPassword ? "Hide password" : "Show password"
+        );
+
+        button.setAttribute(
+            "aria-pressed",
+            String(showPassword)
+        );
+    });
+});

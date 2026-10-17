@@ -2,6 +2,8 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from security import create_access_token
+
 import database
 import main
 
@@ -42,7 +44,7 @@ def test_health_check(client):
 
 
 
-def test_create_transaction(client):
+def test_create_transaction(auth_client):
     new_transaction = {
         "title": "Test Lunch",
         "amount": 2500,
@@ -51,7 +53,7 @@ def test_create_transaction(client):
     }
 
     # Create transaction
-    response = client.post(
+    response = auth_client.post(
         "/transactions",
         json=new_transaction
     )
@@ -65,7 +67,7 @@ def test_create_transaction(client):
     assert data["transaction"]["amount"] == 2500
 
     # Verify transaction was saved
-    response = client.get("/transactions")
+    response = auth_client.get("/transactions")
 
     assert response.status_code == 200
 
@@ -76,7 +78,7 @@ def test_create_transaction(client):
 
 
 
-def test_update_transaction(client):
+def test_update_transaction(auth_client):
     # Step 1: Create a transaction
     original = {
         "title": "Pizza",
@@ -85,7 +87,7 @@ def test_update_transaction(client):
         "type": "expense"
     }
 
-    create_response = client.post(
+    create_response = auth_client.post(
         "/transactions",
         json=original
     )
@@ -102,7 +104,7 @@ def test_update_transaction(client):
         "type": "expense"
     }
 
-    update_response = client.put(
+    update_response = auth_client.put(
         f"/transactions/{transaction_id}",
         json=updated
     )
@@ -111,7 +113,7 @@ def test_update_transaction(client):
     assert update_response.json()["id"] == transaction_id
 
     # Step 3: Verify saved changes
-    get_response = client.get("/transactions")
+    get_response = auth_client.get("/transactions")
 
     assert get_response.status_code == 200
 
@@ -127,7 +129,7 @@ def test_update_transaction(client):
 
 
 
-def test_delete_transaction(client):
+def test_delete_transaction(auth_client):
     # Step 1: Create a transaction
     transaction = {
         "title": "Taxi",
@@ -136,7 +138,7 @@ def test_delete_transaction(client):
         "type": "expense"
     }
 
-    create_response = client.post(
+    create_response = auth_client.post(
         "/transactions",
         json=transaction
     )
@@ -146,7 +148,7 @@ def test_delete_transaction(client):
     transaction_id = create_response.json()["id"]
 
     # Step 2: Delete the transaction
-    delete_response = client.delete(
+    delete_response = auth_client.delete(
         f"/transactions/{transaction_id}"
     )
 
@@ -158,7 +160,7 @@ def test_delete_transaction(client):
     }
 
     # Step 3: Verify transaction was deleted
-    get_response = client.get("/transactions")
+    get_response = auth_client.get("/transactions")
 
     assert get_response.status_code == 200
 
@@ -168,7 +170,7 @@ def test_delete_transaction(client):
     assert data["transactions"] == []
 
     # Step 4: Verify deleting it again returns 404
-    second_delete = client.delete(
+    second_delete = auth_client.delete(
         f"/transactions/{transaction_id}"
     )
 
@@ -179,7 +181,7 @@ def test_delete_transaction(client):
 
 
 
-def test_invalid_transaction_amount(client):
+def test_invalid_transaction_amount(auth_client):
     transaction = {
         "title": "Invalid Expense",
         "amount": -500,
@@ -187,7 +189,7 @@ def test_invalid_transaction_amount(client):
         "type": "expense"
     }
 
-    response = client.post(
+    response = auth_client.post(
         "/transactions",
         json=transaction
     )
@@ -195,13 +197,13 @@ def test_invalid_transaction_amount(client):
     assert response.status_code == 422
 
     # Invalid transaction must not be saved
-    get_response = client.get("/transactions")
+    get_response = auth_client.get("/transactions")
 
     assert get_response.status_code == 200
     assert get_response.json()["total"] == 0
 
 
-def test_invalid_transaction_type(client):
+def test_invalid_transaction_type(auth_client):
     transaction = {
         "title": "Test Payment",
         "amount": 1000,
@@ -209,21 +211,21 @@ def test_invalid_transaction_type(client):
         "type": "payment"
     }
 
-    response = client.post(
+    response = auth_client.post(
         "/transactions",
         json=transaction
     )
 
     assert response.status_code == 422
 
-    get_response = client.get("/transactions")
+    get_response = auth_client.get("/transactions")
 
     assert get_response.status_code == 200
     assert get_response.json()["total"] == 0
 
 
 
-def test_financial_summary(client):
+def test_financial_summary(auth_client):
     # Create income
     income = {
         "title": "Salary",
@@ -240,12 +242,12 @@ def test_financial_summary(client):
         "type": "expense"
     }
 
-    response_income = client.post(
+    response_income = auth_client.post(
         "/transactions",
         json=income
     )
 
-    response_expense = client.post(
+    response_expense = auth_client.post(
         "/transactions",
         json=expense
     )
@@ -254,7 +256,7 @@ def test_financial_summary(client):
     assert response_expense.status_code == 200
 
     # Request financial summary
-    response = client.get("/analytics/summary")
+    response = auth_client.get("/analytics/summary")
 
     assert response.status_code == 200
 
@@ -265,7 +267,7 @@ def test_financial_summary(client):
     assert data["balance"] == 75000
 
 
-def test_category_analytics(client):
+def test_category_analytics(auth_client):
     transactions = [
         {
             "title": "Pizza",
@@ -288,14 +290,14 @@ def test_category_analytics(client):
     ]
 
     for transaction in transactions:
-        response = client.post(
+        response = auth_client.post(
             "/transactions",
             json=transaction
         )
         assert response.status_code == 200
 
     # Request analytics
-    response = client.get("/analytics/categories")
+    response = auth_client.get("/analytics/categories")
 
     assert response.status_code == 200
 
@@ -315,9 +317,9 @@ def test_category_analytics(client):
     assert categories["Transport"]["transaction_count"] == 1
 
 
-def test_empty_database_analytics(client):
+def test_empty_database_analytics(auth_client):
     # Check financial summary
-    response = client.get("/analytics/summary")
+    response = auth_client.get("/analytics/summary")
 
     assert response.status_code == 200
 
@@ -328,7 +330,7 @@ def test_empty_database_analytics(client):
     }
 
     # Check category analytics
-    response = client.get("/analytics/categories")
+    response = auth_client.get("/analytics/categories")
 
     assert response.status_code == 200
 
@@ -337,7 +339,7 @@ def test_empty_database_analytics(client):
     }
 
     # Check transactions
-    response = client.get("/transactions")
+    response = auth_client.get("/transactions")
 
     assert response.status_code == 200
     assert response.json() == {
@@ -346,7 +348,7 @@ def test_empty_database_analytics(client):
     }
 
 
-def test_update_nonexistent_transaction(client):
+def test_update_nonexistent_transaction(auth_client):
     transaction = {
         "title": "Unknown Transaction",
         "amount": 5000,
@@ -354,7 +356,7 @@ def test_update_nonexistent_transaction(client):
         "type": "expense"
     }
 
-    response = client.put(
+    response = auth_client.put(
         "/transactions/9999",
         json=transaction
     )
@@ -366,8 +368,8 @@ def test_update_nonexistent_transaction(client):
     }
 
 
-def test_delete_nonexistent_transaction(client):
-    response = client.delete(
+def test_delete_nonexistent_transaction(auth_client):
+    response = auth_client.delete(
         "/transactions/9999"
     )
 
@@ -378,7 +380,7 @@ def test_delete_nonexistent_transaction(client):
     }
 
 
-def test_zero_amount(client):
+def test_zero_amount(auth_client):
     transaction = {
         "title": "Coffee",
         "amount": 0,
@@ -386,7 +388,7 @@ def test_zero_amount(client):
         "type": "expense"
     }
 
-    response = client.post(
+    response = auth_client.post(
         "/transactions",
         json=transaction
     )
@@ -394,7 +396,7 @@ def test_zero_amount(client):
     assert response.status_code == 422
 
 
-def test_empty_transaction_title(client):
+def test_empty_transaction_title(auth_client):
     transaction = {
         "title": "   ",
         "amount": 2500,
@@ -402,7 +404,7 @@ def test_empty_transaction_title(client):
         "type": "expense"
     }
 
-    response = client.post(
+    response = auth_client.post(
         "/transactions",
         json=transaction
     )
@@ -410,7 +412,123 @@ def test_empty_transaction_title(client):
     assert response.status_code == 422
 
     # Invalid data must not be saved
-    result = client.get("/transactions")
+    result = auth_client.get("/transactions")
 
     assert result.status_code == 200
     assert result.json()["total"] == 0
+
+
+def test_register_user(client):
+    user = {
+        "name": "Test User",
+        "email": "newuser@example.com",
+        "password": "TestPassword123!"
+    }
+
+    response = client.post(
+        "/auth/register",
+        json=user
+    )
+
+    assert response.status_code == 201
+
+    data = response.json()
+
+    assert data["id"] == 1
+    assert data["name"] == "Test User"
+    assert data["email"] == "newuser@example.com"
+
+    # Password must never be returned
+    assert "password" not in data
+    assert "password_hash" not in data
+
+
+def test_duplicate_email(client):
+    user = {
+        "name": "Test User",
+        "email": "duplicate@example.com",
+        "password": "TestPassword123!"
+    }
+
+    first_response = client.post(
+        "/auth/register",
+        json=user
+    )
+
+    assert first_response.status_code == 201
+
+    second_response = client.post(
+        "/auth/register",
+        json=user
+    )
+
+    assert second_response.status_code == 409
+
+    assert second_response.json() == {
+        "detail": "Email already registered"
+    }
+
+def test_transactions_require_authentication(client):
+    response = client.get("/transactions")
+    assert response.status_code == 401
+
+
+def test_create_transaction_requires_authentication(client):
+    response = client.post(
+        "/transactions",
+        json={
+            "title": "Coffee",
+            "amount": 1500,
+            "category": "Food",
+            "type": "expense"
+        }
+    )
+    assert response.status_code == 401
+
+
+def test_analytics_require_authentication(client):
+    response = client.get("/analytics/summary")
+    assert response.status_code == 401
+
+    response = client.get("/analytics/categories")
+    assert response.status_code == 401
+
+
+@pytest.fixture
+def auth_client(client, monkeypatch):
+    # Test-only JWT key
+    monkeypatch.setattr(
+        "security.JWT_SECRET_KEY",
+        "test-secret-key-for-pytest-only-1234567890"
+    )
+
+    # Create test user
+    response = client.post(
+        "/auth/register",
+        json={
+            "name": "Test User",
+            "email": "auth-test@example.com",
+            "password": "TestPassword123!"
+        }
+    )
+
+    assert response.status_code == 201
+
+    user_id = response.json()["id"]
+
+    # Generate JWT
+    token = create_access_token(user_id)
+
+    # Automatically attach token to requests
+    client.headers.update({
+        "Authorization": f"Bearer {token}"
+    })
+
+    return client
+
+
+def test_authenticated_client(auth_client):
+    response = auth_client.get("/auth/me")
+
+    assert response.status_code == 200
+    assert response.json()["email"] == "auth-test@example.com"
