@@ -1,7 +1,13 @@
 
-import sqlite3
 
-DATABASE_NAME = "finance.db"
+import sqlite3
+import os
+
+DATABASE_NAME = os.getenv(
+    "DATABASE_NAME",
+    "finance.db"
+)
+
 
 
 def create_database():

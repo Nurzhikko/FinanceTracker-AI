@@ -1,6 +1,9 @@
 
 from fastapi import FastAPI
 
+from database import DATABASE_NAME
+
+
 app = FastAPI(
     title="FinanceTracker AI",
     description="Personal finance management API",
@@ -37,7 +40,7 @@ class Transaction(BaseModel):
 def create_transaction(transaction: Transaction):
     import sqlite3
 
-    connection = sqlite3.connect("finance.db")
+    connection = sqlite3.connect(DATABASE_NAME)
     cursor = connection.cursor()
 
     cursor.execute(
@@ -70,7 +73,7 @@ def create_transaction(transaction: Transaction):
 def get_transactions():
     import sqlite3
 
-    connection = sqlite3.connect("finance.db")
+    connection = sqlite3.connect(DATABASE_NAME)
     connection.row_factory = sqlite3.Row
 
     cursor = connection.cursor()
@@ -100,7 +103,7 @@ from fastapi import HTTPException
 def delete_transaction(transaction_id: int):
     import sqlite3
 
-    connection = sqlite3.connect("finance.db")
+    connection = sqlite3.connect(DATABASE_NAME)
 
     try:
         cursor = connection.cursor()
@@ -135,7 +138,7 @@ def update_transaction(
 ):
     import sqlite3
 
-    connection = sqlite3.connect("finance.db")
+    connection = sqlite3.connect(DATABASE_NAME)
 
     try:
         cursor = connection.cursor()
@@ -180,7 +183,7 @@ def update_transaction(
 def get_financial_summary():
     import sqlite3
 
-    connection = sqlite3.connect("finance.db")
+    connection = sqlite3.connect(DATABASE_NAME)
 
     try:
         cursor = connection.cursor()
@@ -213,7 +216,7 @@ def get_financial_summary():
 def get_category_analytics():
     import sqlite3
 
-    connection = sqlite3.connect("finance.db")
+    connection = sqlite3.connect(DATABASE_NAME)
 
     try:
         cursor = connection.cursor()
