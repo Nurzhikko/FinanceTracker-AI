@@ -1,6 +1,9 @@
 
 # FinanceTracker AI
 
+[![FinanceTracker AI Tests](https://github.com/Nurzhikko/FinanceTracker-AI/actions/workflows/tests.yml/badge.svg)](https://github.com/Nurzhikko/FinanceTracker-AI/actions/workflows/tests.yml)
+
+
 A full-stack personal finance management web application
 built with Python, FastAPI, SQLite, and JavaScript.
 
