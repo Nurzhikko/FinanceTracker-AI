@@ -220,3 +220,197 @@ def test_invalid_transaction_type(client):
 
     assert get_response.status_code == 200
     assert get_response.json()["total"] == 0
+
+
+
+def test_financial_summary(client):
+    # Create income
+    income = {
+        "title": "Salary",
+        "amount": 100000,
+        "category": "Salary",
+        "type": "income"
+    }
+
+    # Create expense
+    expense = {
+        "title": "Food",
+        "amount": 25000,
+        "category": "Food",
+        "type": "expense"
+    }
+
+    response_income = client.post(
+        "/transactions",
+        json=income
+    )
+
+    response_expense = client.post(
+        "/transactions",
+        json=expense
+    )
+
+    assert response_income.status_code == 200
+    assert response_expense.status_code == 200
+
+    # Request financial summary
+    response = client.get("/analytics/summary")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["total_income"] == 100000
+    assert data["total_expenses"] == 25000
+    assert data["balance"] == 75000
+
+
+def test_category_analytics(client):
+    transactions = [
+        {
+            "title": "Pizza",
+            "amount": 3500,
+            "category": "Food",
+            "type": "expense"
+        },
+        {
+            "title": "Coffee",
+            "amount": 1500,
+            "category": "Food",
+            "type": "expense"
+        },
+        {
+            "title": "Taxi",
+            "amount": 5000,
+            "category": "Transport",
+            "type": "expense"
+        }
+    ]
+
+    for transaction in transactions:
+        response = client.post(
+            "/transactions",
+            json=transaction
+        )
+        assert response.status_code == 200
+
+    # Request analytics
+    response = client.get("/analytics/categories")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data["categories"]) == 2
+
+    categories = {
+        item["category"]: item
+        for item in data["categories"]
+    }
+
+    assert categories["Food"]["total"] == 5000
+    assert categories["Food"]["transaction_count"] == 2
+
+    assert categories["Transport"]["total"] == 5000
+    assert categories["Transport"]["transaction_count"] == 1
+
+
+def test_empty_database_analytics(client):
+    # Check financial summary
+    response = client.get("/analytics/summary")
+
+    assert response.status_code == 200
+
+    assert response.json() == {
+        "total_income": 0,
+        "total_expenses": 0,
+        "balance": 0
+    }
+
+    # Check category analytics
+    response = client.get("/analytics/categories")
+
+    assert response.status_code == 200
+
+    assert response.json() == {
+        "categories": []
+    }
+
+    # Check transactions
+    response = client.get("/transactions")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "total": 0,
+        "transactions": []
+    }
+
+
+def test_update_nonexistent_transaction(client):
+    transaction = {
+        "title": "Unknown Transaction",
+        "amount": 5000,
+        "category": "Other",
+        "type": "expense"
+    }
+
+    response = client.put(
+        "/transactions/9999",
+        json=transaction
+    )
+
+    assert response.status_code == 404
+
+    assert response.json() == {
+        "detail": "Transaction not found"
+    }
+
+
+def test_delete_nonexistent_transaction(client):
+    response = client.delete(
+        "/transactions/9999"
+    )
+
+    assert response.status_code == 404
+
+    assert response.json() == {
+        "detail": "Transaction not found"
+    }
+
+
+def test_zero_amount(client):
+    transaction = {
+        "title": "Coffee",
+        "amount": 0,
+        "category": "Food",
+        "type": "expense"
+    }
+
+    response = client.post(
+        "/transactions",
+        json=transaction
+    )
+
+    assert response.status_code == 422
+
+
+def test_empty_transaction_title(client):
+    transaction = {
+        "title": "   ",
+        "amount": 2500,
+        "category": "Food",
+        "type": "expense"
+    }
+
+    response = client.post(
+        "/transactions",
+        json=transaction
+    )
+
+    assert response.status_code == 422
+
+    # Invalid data must not be saved
+    result = client.get("/transactions")
+
+    assert result.status_code == 200
+    assert result.json()["total"] == 0
