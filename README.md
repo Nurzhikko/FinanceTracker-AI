@@ -4,6 +4,10 @@
 A full-stack personal finance management web application
 built with Python, FastAPI, SQLite, and JavaScript.
 
+## Application Preview
+
+![FinanceTracker AI Dashboard](assets/dashboard.png)
+
 ## Overview
 
 FinanceTracker AI helps users manage their income and
@@ -80,7 +84,13 @@ python database.py
 
 ### 6. Start the server
 
+
+### 6. Start the server
+
+```bash
 python -m uvicorn main:app --reload
+```
+
 
 ## Usage
 
